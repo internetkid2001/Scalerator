@@ -19,7 +19,7 @@ export default function Tablature({
   positions,
   ascii,
 }: TablatureProps) {
-  // only use as many strings as requested
+  // only use as many strings as requested (clamped by incoming tuning length)
   const slice = tuning.slice(0, strings);
 
   // build an empty GRID of “-”
@@ -27,15 +27,17 @@ export default function Tablature({
 
   // fill in our scale notes
   positions.forEach(({ stringIdx, fret }) => {
-    // stringIdx is 0 = lowest, so we reverse it for tablature display
-    const row = strings - 1 - stringIdx;
-    grid[row][fret] = fret.toString();
+    // invert string order: 0 = lowest → bottom row
+    const row = slice.length - 1 - stringIdx;
+    if (row >= 0 && row < grid.length && fret <= frets) {
+      grid[row][fret] = fret.toString();
+    }
   });
 
   if (ascii) {
     // ASCII tabs
     return (
-      <pre className="font-mono">
+      <pre className="font-mono whitespace-pre">
         {slice
           .map((open, i) => {
             const label = open.padEnd(2, "|");
