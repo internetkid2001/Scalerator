@@ -10,17 +10,18 @@ export default function Home() {
   const [strings, setStrings] = useState(6);
   const [frets, setFrets] = useState(12);
   const [ascii, setAscii] = useState(true);
+  const root = "C"; // you can make this dynamic later
 
-  // always C-major for now:
-  const positions = getScalePositions("C", undefined, strings, frets);
+  // compute all the positions for this scale
+  const positions = getScalePositions(root, undefined, strings, frets);
 
   return (
     <main className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Scalerator</h1>
 
-      {/* controls */}
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-6">
-        {/* strings */}
+        {/* Strings */}
         <div className="flex items-center space-x-2">
           <span>Strings:</span>
           <button
@@ -38,7 +39,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* frets */}
+        {/* Frets */}
         <div className="flex items-center space-x-2">
           <span>Frets:</span>
           <button
@@ -56,7 +57,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* tabs toggle */}
+        {/* Tabs Toggle */}
         <button
           onClick={() => setAscii((a) => !a)}
           className="px-3 py-1 border rounded"
@@ -65,12 +66,17 @@ export default function Home() {
         </button>
       </div>
 
-      {/* fretboard */}
+      {/* Fretboard */}
       <div className="w-full overflow-x-auto">
-        <Fretboard strings={strings} frets={frets} positions={positions} />
+        <Fretboard
+          root={root}
+          strings={strings}
+          frets={frets}
+          positions={positions}
+        />
       </div>
 
-      {/* tablature */}
+      {/* Tablature */}
       <div className="w-full overflow-x-auto">
         <Tablature
           strings={strings}
@@ -80,7 +86,7 @@ export default function Home() {
         />
       </div>
 
-      {/* standard notation */}
+      {/* Standard Notation */}
       <div className="w-full overflow-x-auto">
         <StandardNotation positions={positions} />
       </div>
