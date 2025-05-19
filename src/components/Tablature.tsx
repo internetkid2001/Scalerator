@@ -1,58 +1,72 @@
 // src/components/Tablature.tsx
-import { STANDARD_TUNING, Position } from "@/lib/scales";
+"use client";
 
-interface TablatureProps {
+import React from "react";
+import type { Position } from "@/lib/scales";
+
+export interface TablatureProps {
+  tuning: string[];        // ← new
   strings: number;
   frets: number;
   positions: Position[];
-  ascii?: boolean;
+  ascii: boolean;
 }
 
-const Tablature = ({
+export default function Tablature({
+  tuning,
   strings,
   frets,
   positions,
-  ascii = true,
-}: TablatureProps) => {
-  const tuning = STANDARD_TUNING.slice(0, strings);
-  // build an empty GRID of “-”
-  const grid = tuning.map(() => Array(frets + 1).fill("-"));
+  ascii,
+}: TablatureProps) {
+  // only use as many strings as requested
+  const slice = tuning.slice(0, strings);
 
-  // stamp in fret numbers
+  // build an empty GRID of “-”
+  const grid: string[][] = slice.map(() => Array(frets + 1).fill("-"));
+
+  // fill in our scale notes
   positions.forEach(({ stringIdx, fret }) => {
-    grid[stringIdx][fret] = `${fret}`;
+    // stringIdx is 0 = lowest, so we reverse it for tablature display
+    const row = strings - 1 - stringIdx;
+    grid[row][fret] = fret.toString();
   });
 
   if (ascii) {
+    // ASCII tabs
     return (
-      <pre className="mt-4 font-mono">
-        {grid
-          .map(
-            (row, i) =>
-              `${tuning[i]}|${row
-                .map((cell) => (cell.length === 1 ? cell + "-" : cell))
-                .join("")}`
-          )
+      <pre className="font-mono">
+        {slice
+          .map((open, i) => {
+            const label = open.padEnd(2, "|");
+            return label + grid[i].join("-");
+          })
           .join("\n")}
       </pre>
     );
-  }
-
-  // styled‐HTML version
-  return (
-    <div className="mt-4 space-y-1 font-mono">
-      {grid.map((row, i) => (
-        <div key={i} className="flex">
-          <span className="mr-2">{tuning[i]}|</span>
-          {row.map((cell, j) => (
-            <span key={j} className="mx-0.5">
-              {cell}
-            </span>
+  } else {
+    // Styled HTML tabs
+    return (
+      <table className="table-auto border-collapse">
+        <tbody>
+          {slice.map((open, i) => (
+            <tr key={i}>
+              <td className="pr-2 font-mono">{open}|</td>
+              {grid[i].map((cell, j) => (
+                <td
+                  key={j}
+                  className={
+                    "w-6 h-6 border-t border-r text-center align-middle " +
+                    (cell === "-" ? "text-gray-400" : "text-black")
+                  }
+                >
+                  {cell === "-" ? "" : <span className="font-semibold">{cell}</span>}
+                </td>
+              ))}
+            </tr>
           ))}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default Tablature;
+        </tbody>
+      </table>
+    );
+  }
+}
