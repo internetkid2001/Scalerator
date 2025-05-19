@@ -1,49 +1,97 @@
 // src/app/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { TUNINGS, getScalePositions } from "@/lib/scales";
 import Fretboard from "@/components/Fretboard";
 import Tablature from "@/components/Tablature";
 import StandardNotation from "@/components/StandardNotation";
 
-// Derive a TypeScript type from the keys of our TUNINGS object
-type TuningName = keyof typeof TUNINGS;
+// All possible roots (normalize flats to sharps)
+const ROOTS = [
+  "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#",
+] as const;
+type Root = typeof ROOTS[number];
+
+// Scale formulas as semitone intervals
+const SCALE_FORMULAS: Record<string, number[]> = {
+  major:            [2,2,1,2,2,2,1],
+  "natural minor":  [2,1,2,2,1,2,2],
+  "harmonic minor": [2,1,2,2,1,3,1],
+  "melodic minor (asc)":  [2,1,2,2,2,2,1],
+  "melodic minor (desc)": [2,2,1,2,2,1,2],
+  dorian:           [2,1,2,2,2,1,2],
+  phrygian:         [1,2,2,2,1,2,2],
+  lydian:           [2,2,2,1,2,2,1],
+  mixolydian:       [2,2,1,2,2,1,2],
+  locrian:          [1,2,2,1,2,2,2],
+  "pentatonic major": [2,2,3,2,3],
+  "pentatonic minor": [3,2,2,3,2],
+  blues:            [3,2,1,1,3,2],
+  arabic:           [1,3,1,2,1,3,1],
+  "hungarian gypsy": [2,1,3,1,1,3,1],
+  "whole tone":     [2,2,2,2,2,2],
+  augmented:        [3,1,3,1,3,1],
+};
 
 export default function Home() {
-  // Value-level list of tunings
+  // Next-scale controls
+  const [root, setRoot] = useState<Root>("C");
+  const [scaleName, setScaleName] = useState<keyof typeof SCALE_FORMULAS>("major");
+  const intervals = useMemo(() => SCALE_FORMULAS[scaleName], [scaleName]);
+
+  // Tuning selector
+  type TuningName = keyof typeof TUNINGS;
   const tuningNames = Object.keys(TUNINGS) as TuningName[];
-
-  // State, now correctly typed
   const [tuningName, setTuningName] = useState<TuningName>(tuningNames[0]);
-  const [strings, setStrings] = useState(TUNINGS[tuningName].length);
-  const [frets, setFrets] = useState(12);
-  const [ascii, setAscii] = useState(true);
 
-  // Compute current tuning slice and scale positions
-  const tuning = TUNINGS[tuningName].slice(0, strings);
-  const positions = getScalePositions("C", undefined, tuning, frets);
+  // String/fret count and tab style
+  const [strings, setStrings] = useState(TUNINGS[tuningName].length);
+  const [frets, setFrets]     = useState(12);
+  const [ascii, setAscii]     = useState(true);
+
+  // Derive the current tuning array slice
+  const tuning = useMemo(() => TUNINGS[tuningName].slice(0, strings), [tuningName, strings]);
+
+  // Compute fretboard positions
+  const positions = useMemo(
+    () => getScalePositions(root, intervals, tuning, frets),
+    [root, intervals, tuning, frets]
+  );
 
   return (
     <main className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Scalerator</h1>
 
-      {/* controls */}
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-6">
-        {/* tuning selector */}
+        {/* Root */}
         <div className="flex items-center space-x-2">
-          <label htmlFor="tuning-select">Tuning:</label>
+          <label htmlFor="root-select">Root:</label>
           <select
-            id="tuning-select"
-            value={tuningName}
-            onChange={(e) => {
-              const name = e.target.value as TuningName;
-              setTuningName(name);
-              setStrings(TUNINGS[name].length);
-            }}
+            id="root-select"
+            value={root}
+            onChange={e => setRoot(e.target.value as Root)}
             className="border px-2 py-1 rounded"
           >
-            {tuningNames.map((name) => (
+            {ROOTS.map(r => (
+              <option key={r} value={r}>
+                {r.replace("#", "♯")}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Scale */}
+        <div className="flex items-center space-x-2">
+          <label htmlFor="scale-select">Scale:</label>
+          <select
+            id="scale-select"
+            value={scaleName}
+            onChange={e => setScaleName(e.target.value as any)}
+            className="border px-2 py-1 rounded"
+          >
+            {Object.keys(SCALE_FORMULAS).map(name => (
               <option key={name} value={name}>
                 {name}
               </option>
@@ -51,64 +99,68 @@ export default function Home() {
           </select>
         </div>
 
-        {/* strings */}
+        {/* Tuning */}
+        <div className="flex items-center space-x-2">
+          <label htmlFor="tuning-select">Tuning:</label>
+          <select
+            id="tuning-select"
+            value={tuningName}
+            onChange={e => {
+              const nm = e.target.value as TuningName;
+              setTuningName(nm);
+              setStrings(TUNINGS[nm].length);
+            }}
+            className="border px-2 py-1 rounded"
+          >
+            {tuningNames.map(nm => (
+              <option key={nm} value={nm}>{nm}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Strings */}
         <div className="flex items-center space-x-2">
           <span>Strings:</span>
           <button
-            onClick={() => setStrings((s) => Math.max(1, s - 1))}
+            onClick={() => setStrings(s => Math.max(1, s - 1))}
             className="px-2 py-1 bg-blue-600 text-white rounded"
-          >
-            –
-          </button>
+          >–</button>
           <span className="w-6 text-center">{strings}</span>
           <button
-            onClick={() =>
-              setStrings((s) => Math.min(TUNINGS[tuningName].length, s + 1))
-            }
+            onClick={() => setStrings(s => Math.min(TUNINGS[tuningName].length, s + 1))}
             className="px-2 py-1 bg-blue-600 text-white rounded"
-          >
-            +
-          </button>
+          >+</button>
         </div>
 
-        {/* frets */}
+        {/* Frets */}
         <div className="flex items-center space-x-2">
           <span>Frets:</span>
           <button
-            onClick={() => setFrets((f) => Math.max(0, f - 1))}
+            onClick={() => setFrets(f => Math.max(0, f - 1))}
             className="px-2 py-1 bg-green-600 text-white rounded"
-          >
-            –
-          </button>
+          >–</button>
           <span className="w-6 text-center">{frets}</span>
           <button
-            onClick={() => setFrets((f) => f + 1)}
+            onClick={() => setFrets(f => f + 1)}
             className="px-2 py-1 bg-green-600 text-white rounded"
-          >
-            +
-          </button>
+          >+</button>
         </div>
 
-        {/* tabs toggle */}
+        {/* Tabs toggle */}
         <button
-          onClick={() => setAscii((a) => !a)}
+          onClick={() => setAscii(a => !a)}
           className="px-3 py-1 border rounded"
         >
           {ascii ? "ASCII Tabs" : "Styled Tabs"}
         </button>
       </div>
 
-      {/* fretboard */}
+      {/* Fretboard */}
       <div className="w-full overflow-x-auto">
-        <Fretboard
-          root="C"
-          strings={strings}
-          frets={frets}
-          positions={positions}
-        />
+        <Fretboard root={root} strings={strings} frets={frets} positions={positions} />
       </div>
 
-      {/* tablature */}
+      {/* Tablature */}
       <div className="w-full overflow-x-auto">
         <Tablature
           tuning={tuning}
@@ -119,7 +171,7 @@ export default function Home() {
         />
       </div>
 
-      {/* standard notation */}
+      {/* Standard notation */}
       <div className="w-full overflow-x-auto">
         <StandardNotation positions={positions} />
       </div>
