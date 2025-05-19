@@ -9,7 +9,7 @@ import {
   Voice,
   Formatter,
 } from "vexflow";
-import { Position } from "@/lib/scales";
+import { Position, CHROMATIC } from "@/lib/scales";
 
 interface StandardNotationProps {
   positions: Position[];
@@ -43,31 +43,46 @@ export default function StandardNotation({
       .setContext(context)
       .draw();
 
-    // map each scale position's note to a quarter‐note on the staff
-    const notes = positions.map(({ note }) => {
-      // VexFlow wants lowercase + octave, e.g. "c/4"
-      return new StaveNote({
-        clef: "treble",
-        keys: [note.toLowerCase() + "/4"],
-        duration: "q",
-      });
+    // 1) Map each Position → { midi, key } so we can sort by pitch
+    const midiNotes = positions.map(({ note, fret }) => {
+      // find semitone index in CHROMATIC
+      const semitone = CHROMATIC.indexOf(note);
+      // base octave: assume open-string notes start in octave 4,
+      // then each 12 frets is +1 octave
+      const octave = 4 + Math.floor(fret / 12);
+      const midi = octave * 12 + semitone;
+      const key = `${note.toLowerCase()}/${octave}`;
+      return { midi, key };
     });
 
-    // build a voice with one beat per note (4/4 quarter‐notes)
+    // 2) Sort, dedupe, and pull out the keys
+    const sortedKeys = Array.from(
+      new Map(
+        midiNotes
+          .sort((a, b) => a.midi - b.midi)
+          .map(({ key, midi }) => [key, midi])
+      ).keys()
+    );
+
+    // 3) Build quarter-notes for each pitch
+    const notes = sortedKeys.map((key) =>
+      new StaveNote({
+        clef: "treble",
+        keys: [key],
+        duration: "q",
+      })
+    );
+
+    // 4) Put them into a Voice
     const voice = new Voice({
       numBeats: notes.length,
       beatValue: 4,
-    });
-    voice
-      // allow non‐standard tick divisions
+    })
       .setStrict(false)
       .addTickables(notes);
 
-    // format & draw the notes so they span the stave
-    new Formatter()
-      .joinVoices([voice])
-      .format([voice], width - 20);
-
+    // 5) Format & draw
+    new Formatter().joinVoices([voice]).format([voice], width - 20);
     voice.draw(context, stave);
   }, [positions]);
 
