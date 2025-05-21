@@ -3,42 +3,44 @@
 
 import React from "react";
 import type { Position } from "@/lib/scales";
+import { playNote } from "@/lib/audio"; // Import playNote
 
 interface FretboardProps {
   root: string;
   strings?: number;
-  totalFrets: number; // Total frets on the instrument (e.g., 24)
-  visibleFrets?: number; // Number of frets visible in the viewport (e.g., 12)
-  startFret: number; // The first fret visible in the viewport
-  positions: Position[];
-  tuning: string[];
+  totalFrets: number;
+  visibleFrets?: number;
+  startFret: number;
+  positions: Position[] | undefined | null; // Explicitly allow undefined/null
+  tuning: string[] | undefined | null; // Explicitly allow undefined/null
 }
 
 function Fretboard({
   root,
   strings = 6,
-  totalFrets, // Use totalFrets here
-  visibleFrets = 12, // Default to 12 visible frets
+  totalFrets,
+  visibleFrets = 12,
   startFret,
   positions,
   tuning,
 }: FretboardProps) {
-  // Calculate the end fret for the current viewport
+  // Defensive checks: Ensure tuning and positions are arrays
+  const safeTuning = Array.isArray(tuning) ? tuning : [];
+  const safePositions = Array.isArray(positions) ? positions : [];
+
   const endFret = startFret + visibleFrets;
 
-  // Filter positions to only show notes within the current viewport
-  const visiblePositions = positions.filter(
+  const visiblePositions = safePositions.filter(
     (pos) => pos.fret >= startFret && pos.fret < endFret
   );
 
-  // Generate an array of visible fret numbers for rendering
   const fretsToRender = Array.from({ length: visibleFrets + 1 }, (_, i) => startFret + i);
 
   return (
     <div className="flex items-center">
       {/* Tuning Labels (Open String Notes) */}
       <div className="flex flex-col justify-around h-40 pr-2 text-sm font-semibold text-gray-700">
-        {tuning.slice(0, strings).reverse().map((note, i) => (
+        {safeTuning.slice(0, strings).reverse().map((note, i) => (
           <span key={`tuning-note-${i}`} className="text-right">
             {note}
           </span>
@@ -48,11 +50,11 @@ function Fretboard({
       {/* Fretboard Display Area (no longer directly draggable) */}
       <div
         className="relative flex-grow h-40 bg-white border border-gray-300 rounded-lg overflow-hidden"
-        style={{ minWidth: `${(visibleFrets + 1) * 2.5}rem` }} // Adjust minWidth based on visibleFrets
+        style={{ minWidth: `${(visibleFrets + 1) * 2.5}rem` }}
       >
         {/* Fret numbers at the top */}
         <div className="absolute top-0 left-0 right-0 h-6 flex justify-around items-center text-xs text-gray-500">
-          {fretsToRender.slice(1).map((fretNum) => ( // Exclude fret 0 for top labels
+          {fretsToRender.slice(1).map((fretNum) => (
             <span key={`fret-label-${fretNum}`} style={{ width: `${100 / visibleFrets}%` }}>
               {fretNum}
             </span>
@@ -79,16 +81,14 @@ function Fretboard({
 
         {/* scale notes */}
         {visiblePositions.map((position, idx) => {
-          // Calculate note position relative to the startFret
           const left = ((position.fret - startFret) * 100) / visibleFrets;
           const top = ((position.stringIdx + 1) * 100) / (strings + 1);
 
-          // Determine if the current note is the root note
           const isRootNote = position.note === root;
 
           const noteStyleClasses = isRootNote
-            ? "bg-red-500 ring-4 ring-red-700" // Red highlight for root
-            : "bg-blue-500"; // Default blue
+            ? "bg-red-500 ring-4 ring-red-700"
+            : "bg-blue-500";
 
           return (
             <div
@@ -100,7 +100,9 @@ function Fretboard({
                 left: `${left}%`,
                 top: `${top}%`,
                 transform: "translate(-50%, -50%)",
+                cursor: "pointer", // Add cursor pointer to indicate clickability
               }}
+              onClick={() => playNote(position.note + (4 + Math.floor(position.fret / 12)))} // Play the note on click
               aria-label={`Note ${position.note} at string ${position.stringIdx + 1}, fret ${position.fret}`}
             >
               {position.note}

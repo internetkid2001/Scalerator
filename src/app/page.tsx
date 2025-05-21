@@ -1,12 +1,13 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Draggable from "react-draggable";
 import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals, Position } from "@/lib/scales";
 import Fretboard from "@/components/Fretboard";
 import Tablature from "@/components/Tablature";
 import StandardNotation from "@/components/StandardNotation";
+import { playNote } from "@/lib/audio"; // Import playNote for playing the whole scale
 
 // All possible roots - derived directly from CHROMATIC for consistency
 const ROOTS = CHROMATIC.map(note => note) as readonly string[];
@@ -66,15 +67,20 @@ export default function Home() {
   // Memoized tuning based on selection
   const currentTuningDefinition = useMemo(() => {
     setTuningError(null); // Clear previous error
+    let tuningArray: string[] = [];
     if (tuningName === "Custom") {
       try {
-        return parseCustomTuning(customTuningString);
+        tuningArray = parseCustomTuning(customTuningString);
       } catch (e: any) {
         setTuningError(e.message);
-        return []; // Return empty array on error
+        tuningArray = []; // Ensure it's an empty array on error
       }
+    } else {
+      // Ensure TUNINGS[tuningName] is always an array, even if the lookup somehow fails
+      const selectedTuning = TUNINGS[tuningName];
+      tuningArray = Array.isArray(selectedTuning) ? selectedTuning : [];
     }
-    return TUNINGS[tuningName];
+    return tuningArray; // Always return an array
   }, [tuningName, customTuningString]);
 
   // Update strings count when tuning changes (unless it's custom and user is typing)
@@ -110,6 +116,46 @@ export default function Home() {
     [root, intervals, currentTuningDefinition, scaleError, tuningError]
   );
 
+  // Function to play the notes currently visible on the fretboard
+  const playVisibleNotes = async () => { // Renamed from playWholeScale
+    const endFret = startFret + visibleFrets;
+    const visibleNotesOnFretboard = allPositions.filter( // Filter based on current viewport
+      (pos) => pos.fret >= startFret && pos.fret < endFret
+    );
+
+    if (visibleNotesOnFretboard.length === 0) {
+      console.warn("No visible notes to play on the fretboard.");
+      return;
+    }
+
+    // Get unique notes from the visible set, sorted by pitch for melodic playback
+    const uniqueVisibleNotesToPlay = Array.from(new Set(visibleNotesOnFretboard.map(pos => {
+      // Construct a unique identifier for each pitch (note + octave)
+      const octave = 4 + Math.floor(pos.fret / 12);
+      return pos.note + octave;
+    })))
+    .sort((a, b) => {
+      // Simple sorting based on chromatic order and octave for playback
+      const getMidi = (noteStr: string) => {
+        const accidentalMatch = noteStr.match(/[CDEFGAB]#/i);
+        const baseNote = accidentalMatch ? accidentalMatch[0].toUpperCase() : noteStr.substring(0, 1).toUpperCase();
+        const octave = parseInt(noteStr.slice(baseNote.length), 10);
+        const NOTE_TO_MIDI_BASE: { [key: string]: number } = {
+          "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11,
+        };
+        return (octave + 1) * 12 + NOTE_TO_MIDI_BASE[baseNote];
+      };
+      return getMidi(a) - getMidi(b);
+    });
+
+    for (let i = 0; i < uniqueVisibleNotesToPlay.length; i++) {
+      const note = uniqueVisibleNotesToPlay[i];
+      playNote(note, 0.3); // Play each note for 0.3 seconds
+      await new Promise(resolve => setTimeout(resolve, 350)); // Wait slightly longer than duration for separation
+    }
+  };
+
+
   // Calculate draggable bounds for the viewport controller
   const handleDrag = (e: any, ui: any) => {
     if (!draggableTrackRef.current || !draggableHandleRef.current) return;
@@ -139,7 +185,7 @@ export default function Home() {
       <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
         <button
           onClick={() => setIsInfoOpen(!isInfoOpen)}
-          className="w-full text-left font-semibold text-blue-600 flex justify-between items-center py-2" // Added py-2 for padding
+          className="w-full text-left font-semibold text-blue-600 flex justify-between items-center py-2"
           aria-expanded={isInfoOpen}
           aria-controls="info-content"
         >
@@ -164,6 +210,7 @@ export default function Home() {
               <li><strong>Fretboard Viewport Controller:</strong> Drag the blue box to scroll through the entire 24-fret range of the instrument. The tablature and standard notation views will update to match the visible section.</li>
               <li><strong>ASCII Tabs / Styled Tabs:</strong> Toggle between a plain text (ASCII) and a visually styled HTML tablature display.</li>
               <li><strong>Root Note Highlighting:</strong> The root note of the selected scale will be highlighted in red across all three visual representations.</li>
+              <li><strong>Play Visible Notes:</strong> Click this button to hear the notes currently displayed on the fretboard, played in ascending order.</li> {/* Updated instruction */}
             </ul>
             <p className="mt-4">Explore, learn, and master your scales with Scale Explorer!</p>
           </div>
@@ -179,7 +226,7 @@ export default function Home() {
             id="root-select"
             value={root}
             onChange={e => setRoot(e.target.value as Root)}
-            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base" // Changed text-base
+            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select musical root note"
           >
             {ROOTS.map(r => (
@@ -195,7 +242,7 @@ export default function Home() {
             id="scale-select"
             value={scaleName}
             onChange={e => setScaleName(e.target.value as ScaleName)}
-            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base" // Changed text-base
+            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select scale type"
           >
             {Object.keys(SCALE_FORMULAS).map(name => (
@@ -210,7 +257,7 @@ export default function Home() {
                 value={customScaleIntervalsString}
                 onChange={e => setCustomScaleIntervalsString(e.target.value)}
                 placeholder="e.g., 2,2,1,2,2,2,1"
-                className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base mt-1" // Changed text-base
+                className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base mt-1"
                 aria-label="Enter custom scale intervals (comma-separated numbers)"
               />
               {scaleError && <p className="text-red-500 text-sm mt-1">{scaleError}</p>}
@@ -232,7 +279,7 @@ export default function Home() {
                 setStrings(TUNINGS[nm].length);
               }
             }}
-            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base" // Changed text-base
+            className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select instrument tuning"
           >
             {tuningNames.map(name => (
@@ -252,7 +299,7 @@ export default function Home() {
                   setStrings(newStrings > 0 ? newStrings : 1); // Ensure at least 1 string
                 }}
                 placeholder="e.g., E,A,D,G,B,E"
-                className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base mt-1" // Changed text-base
+                className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base mt-1"
                 aria-label="Enter custom tuning (comma-separated notes)"
               />
               {tuningError && <p className="text-red-500 text-xs mt-1">{tuningError}</p>}
@@ -265,15 +312,15 @@ export default function Home() {
           <span className="text-sm font-medium text-gray-700">Strings:</span>
           <button
             onClick={() => setStrings(s => Math.max(1, s - 1))}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-base" // Changed px, py, text-base
+            className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-base"
             aria-label="Decrease number of strings"
           >
             –
           </button>
-          <span className="w-8 text-center font-semibold text-gray-900 text-base">{strings}</span> {/* Changed w, text-base */}
+          <span className="w-8 text-center font-semibold text-gray-900 text-base">{strings}</span>
           <button
             onClick={() => setStrings(s => Math.min(10, s + 1))} // Cap at 10 strings for reasonable display
-            className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-base" // Changed px, py, text-base
+            className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-base"
             aria-label="Increase number of strings"
           >
             +
@@ -285,15 +332,15 @@ export default function Home() {
           <span className="text-sm font-medium text-gray-700">Visible Frets:</span>
           <button
             onClick={() => setVisibleFrets(f => Math.max(1, f - 1))}
-            className="px-4 py-2 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-base" // Changed px, py, text-base
+            className="px-4 py-2 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-base"
             aria-label="Decrease number of visible frets"
           >
             –
           </button>
-          <span className="w-8 text-center font-semibold text-gray-900 text-base">{visibleFrets}</span> {/* Changed w, text-base */}
+          <span className="w-8 text-center font-semibold text-gray-900 text-base">{visibleFrets}</span>
           <button
             onClick={() => setVisibleFrets(f => Math.min(TOTAL_INSTRUMENT_FRETS, f + 1))}
-            className="px-4 py-2 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-base" // Changed px, py, text-base
+            className="px-4 py-2 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-base"
             aria-label="Increase number of visible frets"
           >
             +
@@ -303,16 +350,25 @@ export default function Home() {
         {/* ASCII ↔ Styled Tabs */}
         <button
           onClick={() => setAscii(a => !a)}
-          className="px-5 py-2 border border-gray-300 rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-base" // Changed px, py, text-base
+          className="px-5 py-2 border border-gray-300 rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-base"
           aria-label={ascii ? "Switch to styled tablature" : "Switch to ASCII tablature"}
         >
           {ascii ? "ASCII Tabs" : "Styled Tabs"}
         </button>
-      </div>
+
+        {/* Play Visible Notes Button */}
+        <button
+          onClick={playVisibleNotes} // Changed to playVisibleNotes
+          className="px-5 py-2 bg-purple-600 text-white rounded-md shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 text-base"
+          aria-label="Play visible notes on fretboard"
+        >
+          Play Visible Notes {/* Changed button text */}
+        </button>
+      </div> {/* Closing tag for the controls div */}
 
       {/* Fretboard Viewport Controller (the draggable "box") */}
-      <div ref={draggableTrackRef} className="w-full bg-gray-200 rounded-lg h-10 flex items-center p-1 relative mb-4"> {/* Increased height */}
-        <span className="absolute left-2 text-sm text-gray-600">Fret {startFret}</span> {/* Increased text size */}
+      <div ref={draggableTrackRef} className="w-full bg-gray-200 rounded-lg h-10 flex items-center p-1 relative mb-4">
+        <span className="absolute left-2 text-sm text-gray-600">Fret {startFret}</span>
         <Draggable
           axis="x"
           bounds="parent"
@@ -320,18 +376,18 @@ export default function Home() {
           onDrag={handleDrag}
           nodeRef={draggableHandleRef as React.RefObject<HTMLElement>}
         >
-          <div ref={draggableHandleRef} className="w-20 h-8 bg-blue-500 rounded-md shadow-md cursor-ew-resize flex items-center justify-center text-sm"> {/* Increased width, height, text size */}
+          <div ref={draggableHandleRef} className="w-20 h-8 bg-blue-500 rounded-md shadow-md cursor-ew-resize flex items-center justify-center text-sm">
             Drag
           </div>
         </Draggable>
-        <span className="absolute right-2 text-sm text-gray-600">Fret {TOTAL_INSTRUMENT_FRETS}</span> {/* Increased text size */}
+        <span className="absolute right-2 text-sm text-gray-600">Fret {TOTAL_INSTRUMENT_FRETS}</span>
       </div>
 
 
       {/* Display Sections */}
       {(scaleError || tuningError) ? (
         <div className="text-red-600 bg-red-100 p-4 rounded-lg border border-red-300">
-          <p className="font-semibold text-base">Input Error:</p> {/* Changed text-base */}
+          <p className="font-semibold text-base">Input Error:</p>
           {scaleError && <p className="text-sm">- Scale: {scaleError}</p>}
           {tuningError && <p className="text-sm">- Tuning: {tuningError}</p>}
           <p className="mt-2 text-sm">Please correct the invalid input to see the scale visualization.</p>
@@ -340,7 +396,7 @@ export default function Home() {
         <>
           {/* Fretboard */}
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Fretboard View</h2> {/* Increased text size */}
+            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Fretboard View</h2>
             <Fretboard
               root={root}
               strings={strings}
@@ -354,7 +410,7 @@ export default function Home() {
 
           {/* Tablature */}
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Tablature View</h2> {/* Increased text size */}
+            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Tablature View</h2>
             <Tablature
               tuning={currentTuningDefinition}
               strings={strings}
@@ -369,7 +425,7 @@ export default function Home() {
 
           {/* Standard notation */}
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Standard Notation View</h2> {/* Increased text size */}
+            <h2 className="text-2xl font-semibold mb-4 text-blue-600">Standard Notation View</h2>
             <StandardNotation
               positions={allPositions} // Pass all positions
               root={root}

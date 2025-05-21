@@ -3,71 +3,67 @@
 
 import React from "react";
 import type { Position } from "@/lib/scales";
+import { playNote } from "@/lib/audio"; // Import playNote
 
 export interface TablatureProps {
-  tuning: string[];
+  tuning: string[] | undefined | null; // Explicitly allow undefined/null for defensive coding
   strings: number;
-  frets: number; // This is now total frets for consistency with positions
-  positions: Position[]; // All positions on the instrument
+  frets: number;
+  positions: Position[];
   ascii: boolean;
   root: string;
-  startFret: number; // New prop for viewport
-  visibleFrets: number; // New prop for viewport
+  startFret: number;
+  visibleFrets: number;
 }
 
 function Tablature({
   tuning,
   strings,
-  frets: totalFrets, // Renamed for clarity
+  frets: totalFrets,
   positions,
   ascii,
   root,
   startFret,
   visibleFrets,
 }: TablatureProps) {
-  const slice = tuning.slice(0, strings);
+  // Defensive check: Ensure tuning is an array. If not, default to an empty array.
+  // This is the most robust way to ensure 'tuning' is always an array before any operations.
+  const safeTuning = tuning === undefined || tuning === null ? [] : tuning;
+  const slice = safeTuning.slice(0, strings);
 
-  // Filter positions to only show notes within the current viewport
+
   const endFret = startFret + visibleFrets;
-  const visiblePositions = positions.filter(
+  // Ensure positions is an array before filtering
+  const safePositions = Array.isArray(positions) ? positions : [];
+  const visiblePositions = safePositions.filter(
     (pos) => pos.fret >= startFret && pos.fret < endFret
   );
 
-  // Function to check if a grid cell contains the root note within the visible range
   const isRootNoteAtPosition = (stringIdx: number, fret: number) => {
-    // Invert string order for tablature display: 0 = lowest string -> bottom row
     const actualStringIdx = slice.length - 1 - stringIdx;
     return visiblePositions.some(pos =>
       pos.stringIdx === actualStringIdx &&
       pos.fret === fret &&
-      pos.note === root // Check if the note is the root
+      pos.note === root
     );
   };
 
-  // Build an empty GRID of “-” for the visible frets
   const grid: string[][] = slice.map(() => Array(visibleFrets + 1).fill("-"));
 
-  // Fill in our scale notes for the visible portion
   visiblePositions.forEach(({ stringIdx, fret }) => {
-    // invert string order: 0 = lowest → bottom row
     const row = slice.length - 1 - stringIdx;
-    // Adjust fret index to be relative to the startFret for display in the grid
     const displayFret = fret - startFret;
     if (row >= 0 && row < grid.length && displayFret >= 0 && displayFret <= visibleFrets) {
-      grid[row][displayFret] = fret.toString(); // Display the actual fret number
+      grid[row][displayFret] = fret.toString();
     }
   });
 
-  // Generate fret numbers for the top row of tablature
   const tablatureFretNumbers = Array.from({ length: visibleFrets + 1 }, (_, i) => startFret + i);
 
 
   if (ascii) {
-    // ASCII tabs - highlighting is not straightforward without complex string manipulation
-    // We'll keep it simple for now and rely on styled tabs for visual highlight
     return (
       <pre className="font-mono whitespace-pre">
-        {/* Add fret numbers at the top for ASCII tablature */}
         {"  " + tablatureFretNumbers.slice(1).map(f => f.toString().padEnd(2, " ")).join("") + "\n"}
         {slice
           .map((open, i) => {
@@ -78,15 +74,14 @@ function Tablature({
       </pre>
     );
   } else {
-    // Styled HTML tabs
     return (
       <table className="table-auto border-collapse">
         <thead>
           <tr>
-            <th className="pr-2 font-mono"></th> {/* Empty cell for tuning label column */}
+            <th className="pr-2 font-mono"></th>
             {tablatureFretNumbers.map((fretNum, j) => (
               <th key={`tab-fret-header-${j}`} className="w-6 h-6 border-b border-r text-center align-middle text-xs text-gray-500">
-                {fretNum > 0 ? fretNum : ""} {/* Don't show 0 for open string column */}
+                {fretNum > 0 ? fretNum : ""}
               </th>
             ))}
           </tr>
@@ -95,18 +90,28 @@ function Tablature({
           {slice.map((open, i) => (
             <tr key={i}>
               <td className="pr-2 font-mono">{open}|</td>
-              {grid[i].map((cell, j) => (
-                <td
-                  key={j}
-                  className={
-                    "w-6 h-6 border-t border-r text-center align-middle " +
-                    (cell === "-" ? "text-gray-400" : "text-black") +
-                    (isRootNoteAtPosition(i, startFret + j) ? " bg-red-200 ring-2 ring-red-500" : "") // Red highlight for root
-                  }
-                >
-                  {cell === "-" ? "" : <span className="font-semibold">{cell}</span>}
-                </td>
-              ))}
+              {grid[i].map((cell, j) => {
+                const actualFret = startFret + j;
+                const actualStringIdx = slice.length - 1 - i;
+                // Find the original position object to get the note name
+                const notePosition = safePositions.find(pos => pos.stringIdx === actualStringIdx && pos.fret === actualFret);
+                const noteNameWithOctave = notePosition ? notePosition.note + (4 + Math.floor(notePosition.fret / 12)) : null;
+
+                return (
+                  <td
+                    key={j}
+                    className={ // Corrected 'classNam' to 'className'
+                      "w-6 h-6 border-t border-r text-center align-middle " +
+                      (cell === "-" ? "text-gray-400" : "text-black") +
+                      (isRootNoteAtPosition(i, actualFret) ? " bg-red-200 ring-2 ring-red-500" : "") +
+                      (noteNameWithOctave ? " cursor-pointer" : "") // Add cursor pointer if playable
+                    }
+                    onClick={() => noteNameWithOctave && playNote(noteNameWithOctave)} // Play note if exists
+                  >
+                    {cell === "-" ? "" : <span className="font-semibold">{cell}</span>}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

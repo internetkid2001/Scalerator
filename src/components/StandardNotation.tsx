@@ -10,9 +10,10 @@ import {
   Formatter,
 } from "vexflow";
 import { Position, CHROMATIC } from "@/lib/scales";
+import { playNote } from "@/lib/audio"; // Import playNote
 
 interface StandardNotationProps {
-  positions: Position[]; // All positions on the instrument
+  positions: Position[] | undefined | null; // Explicitly allow undefined/null
   root: string;
   startFret: number;
   visibleFrets: number;
@@ -30,8 +31,8 @@ function StandardNotation({
     const el = containerRef.current;
     if (!el) return;
 
-    // Ensure positions is an array before proceeding
-    const currentPositions = positions || []; // Provide a default empty array if positions is null/undefined
+    // Defensive check: Ensure positions is an array. If not, default to an empty array.
+    const currentPositions = Array.isArray(positions) ? positions : [];
 
     // Clear any previous SVG content to ensure a clean redraw
     el.innerHTML = "";
@@ -54,58 +55,55 @@ function StandardNotation({
 
     // Filter positions to only include notes within the current viewport
     const endFret = startFret + visibleFrets;
-    const visiblePositions = currentPositions.filter( // Use currentPositions here
+    const visiblePositions = currentPositions.filter(
       (pos) => pos.fret >= startFret && pos.fret < endFret
     );
 
-    // 1) Map each visible Position → { midi, key, originalPosition } so we can sort by pitch and link back
+    // 1) Map each visible Position → { midi, key, originalPosition }
     const midiNotesWithPositions = visiblePositions.map((pos) => {
-      // Find semitone index in CHROMATIC
       const semitone = CHROMATIC.indexOf(pos.note);
-      // Base octave: assume open-string notes start in octave 4,
-      // then each 12 frets is +1 octave
       const octave = 4 + Math.floor(pos.fret / 12);
-      const midi = octave * 12 + semitone;
+      const midi = (octave + 1) * 12 + semitone; // Correct MIDI calculation
       const key = `${pos.note.toLowerCase()}/${octave}`;
-      return { midi, key, originalPosition: pos };
+      return { midi, key, originalPosition: pos, noteNameWithOctave: pos.note + octave }; // Store full note name
     });
 
     // 2) Sort, dedupe, and pull out the unique keys and their associated original positions
-    const uniqueNotesMap = new Map<string, { midi: number, originalPositions: Position[] }>();
+    const uniqueNotesMap = new Map<string, { midi: number, originalPositions: Position[], noteNameWithOctave: string }>();
     midiNotesWithPositions
       .sort((a, b) => a.midi - b.midi)
-      .forEach(({ key, midi, originalPosition }) => {
+      .forEach(({ key, midi, originalPosition, noteNameWithOctave }) => {
         if (!uniqueNotesMap.has(key)) {
-          uniqueNotesMap.set(key, { midi, originalPositions: [] });
+          uniqueNotesMap.set(key, { midi, originalPositions: [], noteNameWithOctave });
         }
         uniqueNotesMap.get(key)!.originalPositions.push(originalPosition);
       });
 
     const sortedUniqueNotes = Array.from(uniqueNotesMap.entries())
-      .sort(([, a], [, b]) => a.midi - b.midi) // Sort unique notes by midi value
-      .map(([key, { originalPositions }]) => ({ key, originalPositions }));
+      .sort(([, a], [, b]) => a.midi - b.midi)
+      .map(([key, { originalPositions, noteNameWithOctave }]) => ({ key, originalPositions, noteNameWithOctave }));
 
 
     // 3) Build quarter-notes for each pitch and apply highlighting
-    const notes = sortedUniqueNotes.map(({ key, originalPositions }) => {
+    const notes = sortedUniqueNotes.map(({ key, originalPositions, noteNameWithOctave }) => {
       const staveNote = new StaveNote({
         clef: "treble",
         keys: [key],
         duration: "q",
       });
 
-      // Check if this note is the root note of the scale
       const isRootNote = originalPositions.some(pos => pos.note === root);
 
       if (isRootNote) {
-        // Apply red color to the note head and stem
         staveNote.setStyle({ fillStyle: "red", strokeStyle: "red" });
       }
+
+      // Attach data for click handler
+      (staveNote as any).userData = { noteNameWithOctave };
 
       return staveNote;
     });
 
-    // 4) Put them into a Voice
     const voice = new Voice({
       numBeats: notes.length,
       beatValue: 4,
@@ -113,10 +111,21 @@ function StandardNotation({
       .setStrict(false)
       .addTickables(notes);
 
-    // 5) Format & draw
     new Formatter().joinVoices([voice]).format([voice], width - 20);
     voice.draw(context, stave);
-  }, [positions, root, startFret, visibleFrets]); // Dependency array includes positions, root, startFret, and visibleFrets
+
+    // After drawing, attach click listeners to the rendered SVG elements
+    notes.forEach(note => {
+      const svgElement = note.getSVGElement();
+      if (svgElement && (note as any).userData?.noteNameWithOctave) {
+        svgElement.style.cursor = 'pointer'; // Add pointer cursor
+        svgElement.onclick = () => {
+          playNote((note as any).userData.noteNameWithOctave);
+        };
+      }
+    });
+
+  }, [positions, root, startFret, visibleFrets]);
 
   return (
     <div
