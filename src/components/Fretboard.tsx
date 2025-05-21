@@ -6,31 +6,29 @@ import Draggable from "react-draggable";
 import type { Position } from "@/lib/scales";
 
 interface FretboardProps {
-  root: string;
+  root: string; // New prop to receive the root note for highlighting
   strings?: number;
   frets?: number;
   positions: Position[];
 }
 
 function Fretboard({
-  root,
+  root, // Destructure the root prop
   strings = 6,
   frets = 12,
   positions,
 }: FretboardProps) {
-  // still a div-ref
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
     <Draggable
       axis="x"
       bounds="parent"
-      // cast here so TS sees RefObject<HTMLElement>
       nodeRef={containerRef as React.RefObject<HTMLElement>}
     >
       <div
         ref={containerRef}
-        className="relative w-full max-w-3xl h-40 bg-white border border-gray-300 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing" // Added cursor styles
+        className="relative w-full max-w-3xl h-40 bg-white border border-gray-300 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
       >
         {/* string lines */}
         {[...Array(strings)].map((_, i) => (
@@ -51,23 +49,32 @@ function Fretboard({
         ))}
 
         {/* scale notes */}
-        {positions.map(({ stringIdx, fret, note }, idx) => {
-          const left = (fret * 100) / frets;
-          const top = ((stringIdx + 1) * 100) / (strings + 1);
+        {positions.map((position, idx) => {
+          const left = (position.fret * 100) / frets;
+          const top = ((position.stringIdx + 1) * 100) / (strings + 1);
+
+          // Determine if the current note is the root note
+          const isRootNote = position.note === root;
+
+          const noteStyleClasses = isRootNote
+            ? "bg-red-500 ring-4 ring-red-700" // Red highlight for root
+            : "bg-blue-500"; // Default blue
 
           return (
             <div
               key={idx}
-              className="absolute bg-blue-500 text-white text-xs flex items-center justify-center rounded-full"
+              className={`absolute text-white text-xs flex items-center justify-center rounded-full transition-all duration-100 ease-in-out ${noteStyleClasses}`}
               style={{
                 width: "1.5rem",
                 height: "1.5rem",
                 left: `${left}%`,
                 top: `${top}%`,
                 transform: "translate(-50%, -50%)",
+                // Removed cursor: "pointer" and onClick as highlighting is now based on root, not click
               }}
+              aria-label={`Note ${position.note} at string ${position.stringIdx + 1}, fret ${position.fret}`}
             >
-              {note}
+              {position.note}
             </div>
           );
         })}
@@ -76,4 +83,4 @@ function Fretboard({
   );
 }
 
-export default React.memo(Fretboard); // Wrapped with React.memo
+export default React.memo(Fretboard);

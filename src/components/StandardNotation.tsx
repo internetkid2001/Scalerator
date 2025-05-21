@@ -13,10 +13,12 @@ import { Position, CHROMATIC } from "@/lib/scales";
 
 interface StandardNotationProps {
   positions: Position[];
+  root: string; // New prop to receive the root note for highlighting
 }
 
-function StandardNotation({ // Changed to a named function for React.memo
+function StandardNotation({
   positions,
+  root, // Destructure the root prop
 }: StandardNotationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -24,53 +26,75 @@ function StandardNotation({ // Changed to a named function for React.memo
     const el = containerRef.current;
     if (!el) return;
 
-    // clear any previous SVG
+    // Clear any previous SVG content to ensure a clean redraw
     el.innerHTML = "";
 
-    // measure available width
+    // Measure available width
     const width = el.clientWidth;
     const height = 120;
 
-    // create a VexFlow SVG renderer
+    // Create a VexFlow SVG renderer
     const renderer = new Renderer(el, Renderer.Backends.SVG);
     renderer.resize(width, height);
     const context = renderer.getContext();
 
-    // draw a stave across the full width
+    // Draw a stave across the full width
     const stave = new Stave(0, 0, width - 10);
     stave
       .addClef("treble")
       .setContext(context)
       .draw();
 
-    // 1) Map each Position → { midi, key } so we can sort by pitch
-    const midiNotes = positions.map(({ note, fret }) => {
-      // find semitone index in CHROMATIC
-      const semitone = CHROMATIC.indexOf(note);
-      // base octave: assume open-string notes start in octave 4,
+    // 1) Map each Position → { midi, key, originalPosition } so we can sort by pitch and link back
+    const midiNotesWithPositions = positions.map((pos) => {
+      // Find semitone index in CHROMATIC
+      const semitone = CHROMATIC.indexOf(pos.note);
+      // Base octave: assume open-string notes start in octave 4,
       // then each 12 frets is +1 octave
-      const octave = 4 + Math.floor(fret / 12);
-      const key = `${note.toLowerCase()}/${octave}`;
-      return { midi: octave * 12 + semitone, key }; // Added midi to object for sorting
+      const octave = 4 + Math.floor(pos.fret / 12);
+      const midi = octave * 12 + semitone;
+      const key = `${pos.note.toLowerCase()}/${octave}`;
+      return { midi, key, originalPosition: pos };
     });
 
-    // 2) Sort, dedupe, and pull out the keys
-    const sortedKeys = Array.from(
-      new Map(
-        midiNotes
-          .sort((a, b) => a.midi - b.midi) // Sort by midi value
-          .map(({ key, midi }) => [key, midi]) // Map back to [key, midi] for Map constructor
-      ).keys()
-    );
+    // 2) Sort, dedupe, and pull out the unique keys and their associated original positions
+    // We need to ensure that if multiple fretboard positions map to the same standard note (e.g., C4 on different strings),
+    // we still associate the original position with the note for highlighting purposes.
+    // To do this, we'll keep track of all original positions that map to a unique note.
+    const uniqueNotesMap = new Map<string, { midi: number, originalPositions: Position[] }>();
+    midiNotesWithPositions
+      .sort((a, b) => a.midi - b.midi)
+      .forEach(({ key, midi, originalPosition }) => {
+        if (!uniqueNotesMap.has(key)) {
+          uniqueNotesMap.set(key, { midi, originalPositions: [] });
+        }
+        uniqueNotesMap.get(key)!.originalPositions.push(originalPosition);
+      });
 
-    // 3) Build quarter-notes for each pitch
-    const notes = sortedKeys.map((key) =>
-      new StaveNote({
+    const sortedUniqueNotes = Array.from(uniqueNotesMap.entries())
+      .sort(([, a], [, b]) => a.midi - b.midi) // Sort unique notes by midi value
+      .map(([key, { originalPositions }]) => ({ key, originalPositions }));
+
+
+    // 3) Build quarter-notes for each pitch and apply highlighting
+    const notes = sortedUniqueNotes.map(({ key, originalPositions }) => {
+      const staveNote = new StaveNote({
         clef: "treble",
         keys: [key],
         duration: "q",
-      })
-    );
+      });
+
+      // Check if this note is the root note of the scale
+      // We compare the note name from the original position with the root prop
+      const isRootNote = originalPositions.some(pos => pos.note === root);
+
+      if (isRootNote) {
+        // Apply red color to the note head and stem
+        staveNote.setStyle({ fillStyle: "red", strokeStyle: "red" });
+      }
+
+      return staveNote;
+    });
 
     // 4) Put them into a Voice
     const voice = new Voice({
@@ -83,7 +107,7 @@ function StandardNotation({ // Changed to a named function for React.memo
     // 5) Format & draw
     new Formatter().joinVoices([voice]).format([voice], width - 20);
     voice.draw(context, stave);
-  }, [positions]); // Dependency array includes positions
+  }, [positions, root]); // Dependency array now includes root instead of highlightedPosition
 
   return (
     <div
@@ -94,4 +118,4 @@ function StandardNotation({ // Changed to a named function for React.memo
   );
 }
 
-export default React.memo(StandardNotation); // Wrapped with React.memo
+export default React.memo(StandardNotation);

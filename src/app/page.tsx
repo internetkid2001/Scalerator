@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals } from "@/lib/scales";
+import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals, Position } from "@/lib/scales";
 import Fretboard from "@/components/Fretboard";
 import Tablature from "@/components/Tablature";
 import StandardNotation from "@/components/StandardNotation";
@@ -36,6 +36,9 @@ export default function Home() {
   const [strings, setStrings] = useState(TUNINGS[tuningNames[0]].length); // Initialize with default tuning's string count
   const [frets, setFrets] = useState(DEFAULT_FRETS);
   const [ascii, setAscii] = useState(true);
+
+  // Removed highlightedPosition state as it's no longer needed for root note highlighting
+  // const [highlightedPosition, setHighlightedPosition] = useState<Position | null>(null);
 
   // Memoized intervals based on selection
   const intervals = useMemo(() => {
@@ -78,18 +81,21 @@ export default function Home() {
     () => {
       // Only compute positions if there are no parsing errors and tuning is valid
       if (scaleError || tuningError || currentTuningDefinition.length === 0 || intervals.length === 0) {
+        // setHighlightedPosition(null); // Clear highlight if there's an error or no positions
         return [];
       }
       try {
-        return getScalePositions(root, intervals, currentTuningDefinition, frets);
+        const newPositions = getScalePositions(root, intervals, currentTuningDefinition, frets);
+        // Removed logic to clear highlight based on previous highlightedPosition
+        return newPositions;
       } catch (e: any) {
         // Catch errors from getScalePositions (e.g., unknown root/tuning note)
         console.error("Error computing scale positions:", e.message);
-        // Display a general error or specific error from getScalePositions if needed
+        // setHighlightedPosition(null); // Clear highlight on error
         return [];
       }
     },
-    [root, intervals, currentTuningDefinition, frets, scaleError, tuningError]
+    [root, intervals, currentTuningDefinition, frets, scaleError, tuningError] // Removed highlightedPosition from dependencies
   );
 
   return (
@@ -250,7 +256,7 @@ export default function Home() {
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-blue-600">Fretboard View</h2>
             <Fretboard
-              root={root}
+              root={root} // Pass the root note
               strings={strings}
               frets={frets}
               positions={positions}
@@ -266,13 +272,17 @@ export default function Home() {
               frets={frets}
               positions={positions}
               ascii={ascii}
+              root={root} // Pass the root note
             />
           </section>
 
           {/* Standard notation */}
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-blue-600">Standard Notation View</h2>
-            <StandardNotation positions={positions} />
+            <StandardNotation
+              positions={positions}
+              root={root} // Pass the root note
+            />
           </section>
         </>
       )}
