@@ -40,9 +40,9 @@ export default function Home() {
   const [startFret, setStartFret] = useState(0); // The starting fret for the viewport
   const [ascii, setAscii] = useState(true);
 
-  // Ref for the draggable element's parent bounds (the track)
+  // Ref for the draggable element's parent bounds
   const draggableTrackRef = useRef<HTMLDivElement>(null);
-  // Ref for the draggable element itself (the "Drag" box)
+  // Ref for the draggable element itself
   const draggableHandleRef = useRef<HTMLDivElement>(null);
 
 
@@ -130,7 +130,7 @@ export default function Home() {
 
   return (
     <main className="p-6 space-y-6 bg-gray-50 min-h-screen font-inter text-gray-800">
-      <h1 className="text-4xl font-bold text-blue-700 mb-8 text-center">Scalerator</h1>
+      <h1 className="text-4xl font-bold text-blue-700 mb-8 text-center">Scale Explorer</h1> {/* Changed title here */}
 
       {/* controls */}
       <div className="flex flex-wrap items-center justify-center gap-6 p-4 bg-white rounded-xl shadow-lg">
@@ -280,7 +280,7 @@ export default function Home() {
           bounds="parent"
           position={{ x: (startFret / (TOTAL_INSTRUMENT_FRETS - visibleFrets)) * (draggableTrackRef.current ? draggableTrackRef.current.clientWidth - (draggableHandleRef.current ? draggableHandleRef.current.clientWidth : 0) : 0), y: 0 }}
           onDrag={handleDrag}
-          nodeRef={draggableHandleRef as React.RefObject<HTMLElement>} // Cast nodeRef to HTMLElement
+          nodeRef={draggableHandleRef as React.RefObject<HTMLElement>}
         >
           <div ref={draggableHandleRef} className="w-16 h-6 bg-blue-500 rounded-md shadow-md cursor-ew-resize flex items-center justify-center text-white text-xs">
             Drag

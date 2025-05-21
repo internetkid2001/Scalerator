@@ -99,7 +99,7 @@ export function getScalePositions(
   tuning.forEach((openNote, stringIdx) => {
     const openIdx = CHROMATIC.indexOf(openNote);
     if (openIdx < 0) {
-      console.error(`Error: Unknown tuning note provided: ${openNote}`);
+      console.error(`Error: Unknown tuning note: ${openNote}. Please use valid chromatic notes.`);
       // Return empty array or handle more gracefully in UI
       return [];
     }
@@ -125,8 +125,11 @@ export function parseCustomTuning(tuningString: string): string[] {
   const notes = tuningString.split(',').map(note => note.trim().toUpperCase());
   for (const note of notes) {
     if (CHROMATIC.indexOf(note) === -1) {
-      throw new Error(`Invalid note in custom tuning: ${note}. Valid notes are: ${CHROMATIC.join(', ')}`);
+      throw new Error(`Invalid note in custom tuning: '${note}'. Valid notes are: ${CHROMATIC.join(', ')}`);
     }
+  }
+  if (notes.length === 0) {
+    throw new Error("Custom tuning cannot be empty.");
   }
   return notes;
 }
@@ -142,8 +145,11 @@ export function parseCustomIntervals(intervalString: string): number[] {
   const intervals = intervalString.split(',').map(s => parseInt(s.trim(), 10));
   for (const interval of intervals) {
     if (isNaN(interval) || interval <= 0) {
-      throw new Error(`Invalid interval in custom scale: ${interval}. Intervals must be positive integers.`);
+      throw new Error(`Invalid interval: '${interval}'. Intervals must be positive integers.`);
     }
+  }
+  if (intervals.length === 0) {
+    throw new Error("Custom scale intervals cannot be empty.");
   }
   return intervals;
 }
