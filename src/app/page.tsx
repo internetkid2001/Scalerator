@@ -1,7 +1,8 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import Draggable from "react-draggable";
 import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals, Position } from "@/lib/scales";
 import Fretboard from "@/components/Fretboard";
 import Tablature from "@/components/Tablature";
@@ -14,8 +15,9 @@ type Root = typeof ROOTS[number];
 type ScaleName = keyof typeof SCALE_FORMULAS | "Custom";
 type TuningName = keyof typeof TUNINGS | "Custom";
 
-// Constants for fretboard dimensions to avoid magic numbers
-const DEFAULT_FRETS = 12;
+// Constants for fretboard dimensions
+const TOTAL_INSTRUMENT_FRETS = 24; // Maximum frets on the instrument
+const DEFAULT_VISIBLE_FRETS = 12; // How many frets are visible at once
 const MIN_FRETS = 0; // Fret 0 is open string
 const MAX_FRETS = 24; // A reasonable maximum for visualization
 
@@ -34,8 +36,15 @@ export default function Home() {
 
   // --- strings / frets / ascii toggle ---
   const [strings, setStrings] = useState(TUNINGS[tuningNames[0]].length); // Initialize with default tuning's string count
-  const [frets, setFrets] = useState(DEFAULT_FRETS);
+  const [visibleFrets, setVisibleFrets] = useState(DEFAULT_VISIBLE_FRETS); // Number of frets visible at once
+  const [startFret, setStartFret] = useState(0); // The starting fret for the viewport
   const [ascii, setAscii] = useState(true);
+
+  // Ref for the draggable element's parent bounds (the track)
+  const draggableTrackRef = useRef<HTMLDivElement>(null);
+  // Ref for the draggable element itself (the "Drag" box)
+  const draggableHandleRef = useRef<HTMLDivElement>(null);
+
 
   // Memoized intervals based on selection
   const intervals = useMemo(() => {
@@ -72,25 +81,52 @@ export default function Home() {
     }
   }, [tuningName, currentTuningDefinition]);
 
+  // Adjust startFret if visibleFrets or totalFrets changes to keep it within bounds
+  useEffect(() => {
+    setStartFret(prevStartFret =>
+      Math.min(prevStartFret, TOTAL_INSTRUMENT_FRETS - visibleFrets)
+    );
+  }, [visibleFrets]);
 
-  // Recompute positions based on all parameters
-  const positions = useMemo(
+  // Recompute positions based on all parameters (all frets on the instrument)
+  const allPositions = useMemo(
     () => {
-      // Only compute positions if there are no parsing errors and tuning is valid
+      // If there are any parsing errors or invalid tuning/intervals, return an empty array
       if (scaleError || tuningError || currentTuningDefinition.length === 0 || intervals.length === 0) {
         return [];
       }
       try {
-        const newPositions = getScalePositions(root, intervals, currentTuningDefinition, frets);
-        return newPositions;
+        // Get positions for the entire instrument (up to TOTAL_INSTRUMENT_FRETS)
+        return getScalePositions(root, intervals, currentTuningDefinition, TOTAL_INSTRUMENT_FRETS);
       } catch (e: any) {
         // Catch errors from getScalePositions (e.g., unknown root/tuning note)
         console.error("Error computing scale positions:", e.message);
-        return [];
+        return []; // Always return an empty array on error
       }
     },
-    [root, intervals, currentTuningDefinition, frets, scaleError, tuningError]
+    [root, intervals, currentTuningDefinition, scaleError, tuningError]
   );
+
+  // Calculate draggable bounds for the viewport controller
+  const handleDrag = (e: any, ui: any) => {
+    if (!draggableTrackRef.current || !draggableHandleRef.current) return;
+
+    const parentWidth = draggableTrackRef.current.clientWidth;
+    const draggableWidth = draggableHandleRef.current.clientWidth;
+    const availableDragWidth = parentWidth - draggableWidth;
+
+    const fretRange = TOTAL_INSTRUMENT_FRETS - visibleFrets;
+
+    if (fretRange <= 0 || availableDragWidth <= 0) {
+        setStartFret(0);
+        return;
+    }
+
+    const newStartFret = Math.round((ui.x / availableDragWidth) * fretRange);
+
+    setStartFret(Math.max(0, Math.min(newStartFret, fretRange)));
+  };
+
 
   return (
     <main className="p-6 space-y-6 bg-gray-50 min-h-screen font-inter text-gray-800">
@@ -206,21 +242,21 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Frets */}
+        {/* Visible Frets */}
         <div className="flex items-center space-x-2">
-          <span className="text-sm font-medium text-gray-700">Frets:</span>
+          <span className="text-sm font-medium text-gray-700">Visible Frets:</span>
           <button
-            onClick={() => setFrets(f => Math.max(MIN_FRETS, f - 1))}
+            onClick={() => setVisibleFrets(f => Math.max(1, f - 1))}
             className="px-3 py-1 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-            aria-label="Decrease number of frets"
+            aria-label="Decrease number of visible frets"
           >
             –
           </button>
-          <span className="w-6 text-center font-semibold text-gray-900">{frets}</span>
+          <span className="w-6 text-center font-semibold text-gray-900">{visibleFrets}</span>
           <button
-            onClick={() => setFrets(f => Math.min(MAX_FRETS, f + 1))}
+            onClick={() => setVisibleFrets(f => Math.min(TOTAL_INSTRUMENT_FRETS, f + 1))}
             className="px-3 py-1 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-            aria-label="Increase number of frets"
+            aria-label="Increase number of visible frets"
           >
             +
           </button>
@@ -236,6 +272,24 @@ export default function Home() {
         </button>
       </div>
 
+      {/* Fretboard Viewport Controller (the draggable "box") */}
+      <div ref={draggableTrackRef} className="w-full bg-gray-200 rounded-lg h-8 flex items-center p-1 relative mb-4">
+        <span className="absolute left-2 text-xs text-gray-600">Fret {startFret}</span>
+        <Draggable
+          axis="x"
+          bounds="parent"
+          position={{ x: (startFret / (TOTAL_INSTRUMENT_FRETS - visibleFrets)) * (draggableTrackRef.current ? draggableTrackRef.current.clientWidth - (draggableHandleRef.current ? draggableHandleRef.current.clientWidth : 0) : 0), y: 0 }}
+          onDrag={handleDrag}
+          nodeRef={draggableHandleRef as React.RefObject<HTMLElement>} // Cast nodeRef to HTMLElement
+        >
+          <div ref={draggableHandleRef} className="w-16 h-6 bg-blue-500 rounded-md shadow-md cursor-ew-resize flex items-center justify-center text-white text-xs">
+            Drag
+          </div>
+        </Draggable>
+        <span className="absolute right-2 text-xs text-gray-600">Fret {TOTAL_INSTRUMENT_FRETS}</span>
+      </div>
+
+
       {/* Display Sections */}
       {(scaleError || tuningError) ? (
         <div className="text-red-600 bg-red-100 p-4 rounded-lg border border-red-300">
@@ -250,11 +304,13 @@ export default function Home() {
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-blue-600">Fretboard View</h2>
             <Fretboard
-              root={root} // Pass the root note
+              root={root}
               strings={strings}
-              frets={frets}
-              positions={positions}
-              tuning={currentTuningDefinition} // Pass the current tuning definition
+              totalFrets={TOTAL_INSTRUMENT_FRETS}
+              visibleFrets={visibleFrets}
+              startFret={startFret}
+              positions={allPositions}
+              tuning={currentTuningDefinition}
             />
           </section>
 
@@ -262,12 +318,14 @@ export default function Home() {
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-blue-600">Tablature View</h2>
             <Tablature
-              tuning={currentTuningDefinition} // Use the parsed tuning
+              tuning={currentTuningDefinition}
               strings={strings}
-              frets={frets}
-              positions={positions}
+              frets={TOTAL_INSTRUMENT_FRETS}
+              positions={allPositions}
               ascii={ascii}
-              root={root} // Pass the root note
+              root={root}
+              startFret={startFret}
+              visibleFrets={visibleFrets}
             />
           </section>
 
@@ -275,8 +333,10 @@ export default function Home() {
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-xl font-semibold mb-4 text-blue-600">Standard Notation View</h2>
             <StandardNotation
-              positions={positions}
-              root={root} // Pass the root note
+              positions={allPositions} // Pass all positions
+              root={root}
+              startFret={startFret}
+              visibleFrets={visibleFrets}
             />
           </section>
         </>

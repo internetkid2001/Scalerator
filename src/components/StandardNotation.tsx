@@ -12,19 +12,26 @@ import {
 import { Position, CHROMATIC } from "@/lib/scales";
 
 interface StandardNotationProps {
-  positions: Position[];
-  root: string; // New prop to receive the root note for highlighting
+  positions: Position[]; // All positions on the instrument
+  root: string;
+  startFret: number;
+  visibleFrets: number;
 }
 
 function StandardNotation({
   positions,
-  root, // Destructure the root prop
+  root,
+  startFret,
+  visibleFrets,
 }: StandardNotationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
+    // Ensure positions is an array before proceeding
+    const currentPositions = positions || []; // Provide a default empty array if positions is null/undefined
 
     // Clear any previous SVG content to ensure a clean redraw
     el.innerHTML = "";
@@ -45,8 +52,14 @@ function StandardNotation({
       .setContext(context)
       .draw();
 
-    // 1) Map each Position → { midi, key, originalPosition } so we can sort by pitch and link back
-    const midiNotesWithPositions = positions.map((pos) => {
+    // Filter positions to only include notes within the current viewport
+    const endFret = startFret + visibleFrets;
+    const visiblePositions = currentPositions.filter( // Use currentPositions here
+      (pos) => pos.fret >= startFret && pos.fret < endFret
+    );
+
+    // 1) Map each visible Position → { midi, key, originalPosition } so we can sort by pitch and link back
+    const midiNotesWithPositions = visiblePositions.map((pos) => {
       // Find semitone index in CHROMATIC
       const semitone = CHROMATIC.indexOf(pos.note);
       // Base octave: assume open-string notes start in octave 4,
@@ -58,9 +71,6 @@ function StandardNotation({
     });
 
     // 2) Sort, dedupe, and pull out the unique keys and their associated original positions
-    // We need to ensure that if multiple fretboard positions map to the same standard note (e.g., C4 on different strings),
-    // we still associate the original position with the note for highlighting purposes.
-    // To do this, we'll keep track of all original positions that map to a unique note.
     const uniqueNotesMap = new Map<string, { midi: number, originalPositions: Position[] }>();
     midiNotesWithPositions
       .sort((a, b) => a.midi - b.midi)
@@ -85,7 +95,6 @@ function StandardNotation({
       });
 
       // Check if this note is the root note of the scale
-      // We compare the note name from the original position with the root prop
       const isRootNote = originalPositions.some(pos => pos.note === root);
 
       if (isRootNote) {
@@ -107,7 +116,7 @@ function StandardNotation({
     // 5) Format & draw
     new Formatter().joinVoices([voice]).format([voice], width - 20);
     voice.draw(context, stave);
-  }, [positions, root]); // Dependency array now includes root instead of highlightedPosition
+  }, [positions, root, startFret, visibleFrets]); // Dependency array includes positions, root, startFret, and visibleFrets
 
   return (
     <div

@@ -1,32 +1,43 @@
 // src/components/Fretboard.tsx
 "use client";
 
-import React, { useRef } from "react";
-import Draggable from "react-draggable";
+import React from "react";
 import type { Position } from "@/lib/scales";
 
 interface FretboardProps {
-  root: string; // New prop to receive the root note for highlighting
+  root: string;
   strings?: number;
-  frets?: number;
+  totalFrets: number; // Total frets on the instrument (e.g., 24)
+  visibleFrets?: number; // Number of frets visible in the viewport (e.g., 12)
+  startFret: number; // The first fret visible in the viewport
   positions: Position[];
-  tuning: string[]; // New prop to receive the tuning notes
+  tuning: string[];
 }
 
 function Fretboard({
-  root, // Destructure the root prop
+  root,
   strings = 6,
-  frets = 12,
+  totalFrets, // Use totalFrets here
+  visibleFrets = 12, // Default to 12 visible frets
+  startFret,
   positions,
-  tuning, // Destructure the tuning prop
+  tuning,
 }: FretboardProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Calculate the end fret for the current viewport
+  const endFret = startFret + visibleFrets;
+
+  // Filter positions to only show notes within the current viewport
+  const visiblePositions = positions.filter(
+    (pos) => pos.fret >= startFret && pos.fret < endFret
+  );
+
+  // Generate an array of visible fret numbers for rendering
+  const fretsToRender = Array.from({ length: visibleFrets + 1 }, (_, i) => startFret + i);
 
   return (
-    <div className="flex items-center"> {/* Flex container to hold tuning labels and fretboard */}
+    <div className="flex items-center">
       {/* Tuning Labels (Open String Notes) */}
       <div className="flex flex-col justify-around h-40 pr-2 text-sm font-semibold text-gray-700">
-        {/* Map through the tuning notes in reverse to match fretboard string order (low to high string visually) */}
         {tuning.slice(0, strings).reverse().map((note, i) => (
           <span key={`tuning-note-${i}`} className="text-right">
             {note}
@@ -34,65 +45,69 @@ function Fretboard({
         ))}
       </div>
 
-      <Draggable
-        axis="x"
-        bounds="parent"
-        nodeRef={containerRef as React.RefObject<HTMLElement>}
+      {/* Fretboard Display Area (no longer directly draggable) */}
+      <div
+        className="relative flex-grow h-40 bg-white border border-gray-300 rounded-lg overflow-hidden"
+        style={{ minWidth: `${(visibleFrets + 1) * 2.5}rem` }} // Adjust minWidth based on visibleFrets
       >
-        <div
-          ref={containerRef}
-          className="relative flex-grow h-40 bg-white border border-gray-300 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
-          style={{ minWidth: `${(frets + 1) * 2.5}rem` }} /* Ensure enough width for frets */
-        >
-          {/* string lines */}
-          {[...Array(strings)].map((_, i) => (
-            <div
-              key={`string-${i}`}
-              className="absolute left-0 right-0 h-px bg-gray-400"
-              style={{ top: `${((i + 1) * 100) / (strings + 1)}%` }}
-            />
+        {/* Fret numbers at the top */}
+        <div className="absolute top-0 left-0 right-0 h-6 flex justify-around items-center text-xs text-gray-500">
+          {fretsToRender.slice(1).map((fretNum) => ( // Exclude fret 0 for top labels
+            <span key={`fret-label-${fretNum}`} style={{ width: `${100 / visibleFrets}%` }}>
+              {fretNum}
+            </span>
           ))}
-
-          {/* fret lines */}
-          {[...Array(frets + 1)].map((_, f) => (
-            <div
-              key={`fret-${f}`}
-              className="absolute top-0 bottom-0 w-px bg-gray-300"
-              style={{ left: `${(f * 100) / frets}%` }}
-            />
-          ))}
-
-          {/* scale notes */}
-          {positions.map((position, idx) => {
-            const left = (position.fret * 100) / frets;
-            const top = ((position.stringIdx + 1) * 100) / (strings + 1);
-
-            // Determine if the current note is the root note
-            const isRootNote = position.note === root;
-
-            const noteStyleClasses = isRootNote
-              ? "bg-red-500 ring-4 ring-red-700" // Red highlight for root
-              : "bg-blue-500"; // Default blue
-
-            return (
-              <div
-                key={idx}
-                className={`absolute text-white text-xs flex items-center justify-center rounded-full transition-all duration-100 ease-in-out ${noteStyleClasses}`}
-                style={{
-                  width: "1.5rem",
-                  height: "1.5rem",
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  transform: "translate(-50%, -50%)",
-                }}
-                aria-label={`Note ${position.note} at string ${position.stringIdx + 1}, fret ${position.fret}`}
-              >
-                {position.note}
-              </div>
-            );
-          })}
         </div>
-      </Draggable>
+
+        {/* string lines */}
+        {[...Array(strings)].map((_, i) => (
+          <div
+            key={`string-${i}`}
+            className="absolute left-0 right-0 h-px bg-gray-400"
+            style={{ top: `${((i + 1) * 100) / (strings + 1)}%` }}
+          />
+        ))}
+
+        {/* fret lines */}
+        {fretsToRender.map((fretNum) => (
+          <div
+            key={`fret-line-${fretNum}`}
+            className="absolute top-0 bottom-0 w-px bg-gray-300"
+            style={{ left: `${((fretNum - startFret) * 100) / visibleFrets}%` }}
+          />
+        ))}
+
+        {/* scale notes */}
+        {visiblePositions.map((position, idx) => {
+          // Calculate note position relative to the startFret
+          const left = ((position.fret - startFret) * 100) / visibleFrets;
+          const top = ((position.stringIdx + 1) * 100) / (strings + 1);
+
+          // Determine if the current note is the root note
+          const isRootNote = position.note === root;
+
+          const noteStyleClasses = isRootNote
+            ? "bg-red-500 ring-4 ring-red-700" // Red highlight for root
+            : "bg-blue-500"; // Default blue
+
+          return (
+            <div
+              key={idx}
+              className={`absolute text-white text-xs flex items-center justify-center rounded-full transition-all duration-100 ease-in-out ${noteStyleClasses}`}
+              style={{
+                width: "1.5rem",
+                height: "1.5rem",
+                left: `${left}%`,
+                top: `${top}%`,
+                transform: "translate(-50%, -50%)",
+              }}
+              aria-label={`Note ${position.note} at string ${position.stringIdx + 1}, fret ${position.fret}`}
+            >
+              {position.note}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
