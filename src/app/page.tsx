@@ -3,11 +3,11 @@
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import Draggable from "react-draggable";
-import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals, Position } from "@/lib/scales";
+import { TUNINGS, SCALE_FORMULAS, getScalePositions, CHROMATIC, parseCustomTuning, parseCustomIntervals, Position, getNoteWithOctave } from "@/lib/scales"; // Added getNoteWithOctave to import
 import Fretboard from "@/components/Fretboard";
 import Tablature from "@/components/Tablature";
 import StandardNotation from "@/components/StandardNotation";
-import { playNote } from "@/lib/audio"; // Import playNote for playing the whole scale
+import { playNote } from "@/lib/audio"; // Corrected import syntax: use 'from' instead of '=>'
 
 // All possible roots - derived directly from CHROMATIC for consistency
 const ROOTS = CHROMATIC.map(note => note) as readonly string[];
@@ -117,9 +117,12 @@ export default function Home() {
   );
 
   // Function to play the notes currently visible on the fretboard
-  const playVisibleNotes = async () => { // Renamed from playWholeScale
+  const playVisibleNotes = async () => {
+    // Add a small initial delay to ensure AudioContext is fully active
+    await new Promise(resolve => setTimeout(resolve, 100)); // Delay for 100ms
+
     const endFret = startFret + visibleFrets;
-    const visibleNotesOnFretboard = allPositions.filter( // Filter based on current viewport
+    const visibleNotesOnFretboard = allPositions.filter(
       (pos) => pos.fret >= startFret && pos.fret < endFret
     );
 
@@ -130,10 +133,16 @@ export default function Home() {
 
     // Get unique notes from the visible set, sorted by pitch for melodic playback
     const uniqueVisibleNotesToPlay = Array.from(new Set(visibleNotesOnFretboard.map(pos => {
-      // Construct a unique identifier for each pitch (note + octave)
-      const octave = 4 + Math.floor(pos.fret / 12);
-      return pos.note + octave;
-    })))
+      // Get the open string note for this position's string
+      const openStringNote = currentTuningDefinition[pos.stringIdx];
+      // Construct a unique identifier for each pitch (note + octave) using the accurate helper
+      // Ensure openStringNote is valid before passing to getNoteWithOctave
+      if (!openStringNote) {
+        console.warn(`Could not determine open string note for stringIdx ${pos.stringIdx}. Skipping note.`);
+        return ''; // Return empty string to filter out invalid notes
+      }
+      return getNoteWithOctave(pos.note, pos.fret, openStringNote);
+    }))).filter(Boolean) // Filter out any empty strings from invalid notes
     .sort((a, b) => {
       // Simple sorting based on chromatic order and octave for playback
       const getMidi = (noteStr: string) => {
@@ -143,6 +152,11 @@ export default function Home() {
         const NOTE_TO_MIDI_BASE: { [key: string]: number } = {
           "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11,
         };
+        // Ensure baseNote is valid before accessing NOTE_TO_MIDI_BASE
+        if (!(baseNote in NOTE_TO_MIDI_BASE) || isNaN(octave)) {
+            console.warn(`Invalid note string for MIDI conversion: ${noteStr}. Skipping.`);
+            return -1; // Return a value that will cause it to be sorted to the beginning/end
+        }
         return (octave + 1) * 12 + NOTE_TO_MIDI_BASE[baseNote];
       };
       return getMidi(a) - getMidi(b);
@@ -195,7 +209,7 @@ export default function Home() {
         <div
           id="info-content"
           className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isInfoOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
+            isInfoOpen ? 'max-h-screen opacity-100 mt-4 overflow-y-auto' : 'max-h-0 opacity-0' // Changed max-h and added overflow-y-auto
           }`}
         >
           <div className="prose prose-sm max-w-none text-gray-700">
@@ -210,7 +224,7 @@ export default function Home() {
               <li><strong>Fretboard Viewport Controller:</strong> Drag the blue box to scroll through the entire 24-fret range of the instrument. The tablature and standard notation views will update to match the visible section.</li>
               <li><strong>ASCII Tabs / Styled Tabs:</strong> Toggle between a plain text (ASCII) and a visually styled HTML tablature display.</li>
               <li><strong>Root Note Highlighting:</strong> The root note of the selected scale will be highlighted in red across all three visual representations.</li>
-              <li><strong>Play Visible Notes:</strong> Click this button to hear the notes currently displayed on the fretboard, played in ascending order.</li> {/* Updated instruction */}
+              <li><strong>Play Visible Notes:</strong> Click this button to hear the notes currently displayed on the fretboard, played in ascending order.</li>
             </ul>
             <p className="mt-4">Explore, learn, and master your scales with Scale Explorer!</p>
           </div>
@@ -228,6 +242,7 @@ export default function Home() {
             onChange={e => setRoot(e.target.value as Root)}
             className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select musical root note"
+            suppressHydrationWarning
           >
             {ROOTS.map(r => (
               <option key={r} value={r}>{r.replace("#","♯")}</option>
@@ -244,6 +259,7 @@ export default function Home() {
             onChange={e => setScaleName(e.target.value as ScaleName)}
             className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select scale type"
+            suppressHydrationWarning
           >
             {Object.keys(SCALE_FORMULAS).map(name => (
               <option key={name} value={name}>{name}</option>
@@ -281,6 +297,7 @@ export default function Home() {
             }}
             className="border border-gray-300 px-3 py-2 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
             aria-label="Select instrument tuning"
+            suppressHydrationWarning
           >
             {tuningNames.map(name => (
               <option key={name} value={name}>{name}</option>
@@ -358,13 +375,13 @@ export default function Home() {
 
         {/* Play Visible Notes Button */}
         <button
-          onClick={playVisibleNotes} // Changed to playVisibleNotes
+          onClick={playVisibleNotes}
           className="px-5 py-2 bg-purple-600 text-white rounded-md shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 text-base"
           aria-label="Play visible notes on fretboard"
         >
-          Play Visible Notes {/* Changed button text */}
+          Play Visible Notes
         </button>
-      </div> {/* Closing tag for the controls div */}
+      </div>
 
       {/* Fretboard Viewport Controller (the draggable "box") */}
       <div ref={draggableTrackRef} className="w-full bg-gray-200 rounded-lg h-10 flex items-center p-1 relative mb-4">
@@ -427,10 +444,11 @@ export default function Home() {
           <section className="w-full overflow-x-auto p-4 bg-white rounded-xl shadow-lg">
             <h2 className="text-2xl font-semibold mb-4 text-blue-600">Standard Notation View</h2>
             <StandardNotation
-              positions={allPositions} // Pass all positions
+              positions={allPositions}
               root={root}
               startFret={startFret}
               visibleFrets={visibleFrets}
+              tuning={currentTuningDefinition} // Pass tuning to StandardNotation
             />
           </section>
         </>

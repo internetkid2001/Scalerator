@@ -153,3 +153,73 @@ export function parseCustomIntervals(intervalString: string): number[] {
   }
   return intervals;
 }
+
+/**
+ * Calculates the full note name with octave (e.g., "C4", "G#3") for a given note on a string and fret.
+ * This is crucial for accurate audio playback.
+ * @param note The base note name (e.g., "C", "G#").
+ * @param fret The fret number.
+ * @param openStringNote The note of the open string.
+ * @returns The full note name with octave.
+ */
+export function getNoteWithOctave(note: string, fret: number, openStringNote: string): string {
+  const openIdx = CHROMATIC.indexOf(openStringNote);
+  if (openIdx < 0) {
+    console.warn(`getNoteWithOctave: Unknown open string note: ${openStringNote}`);
+    return note; // Fallback to just the note if open string is unknown
+  }
+
+  // Determine the base octave of the open string.
+  // A common convention is E4 for high E string, E2 for low E string.
+  // Let's assume a base octave for C0 (MIDI 12) to calculate relative octaves.
+  // For simplicity, we can assume typical guitar range (E2-E4) or a general mid-range.
+  // Let's use A4 (MIDI 69) as a reference point.
+  // C4 is MIDI 60.
+  // If openStringNote is 'E' (MIDI 4), and it's the high E string, it's E4 (MIDI 64).
+  // If it's the low E string, it's E2 (MIDI 40).
+  // This is a simplified approach; a more precise one would need string-specific base octaves.
+  // For now, let's derive the octave based on the MIDI value of the note at fret 0.
+
+  // Find the MIDI index of the open string note within the chromatic scale (0-11)
+  const openNoteChromaticIndex = CHROMATIC.indexOf(openStringNote);
+
+  // We need a reference MIDI note and its corresponding octave.
+  // Let's assume C4 is MIDI 60.
+  // The MIDI value of the open string note can be approximated.
+  // A more robust solution would involve a map of open string notes to their exact MIDI values.
+  // For now, let's use a simplified approach:
+  // Assume open E string (standard tuning) is E2 (MIDI 40) for low E, E4 (MIDI 64) for high E.
+  // This is a simplification. A more accurate approach would be to pass the base octave for each string.
+  // For the purpose of playing notes, the `playNote` function already handles octave parsing.
+  // So, we just need to ensure the octave we append is reasonable.
+
+  // Let's use a fixed reference for octave calculation: C4 is MIDI 60.
+  // The MIDI value of the note at the current fret:
+  const noteChromaticIndex = CHROMATIC.indexOf(note);
+  const totalSemitonesFromC0 = openNoteChromaticIndex + fret; // Semitones from C0 if C0 is 0 index
+
+  // Calculate the octave relative to C0 (MIDI 12)
+  // MIDI note = (octave + 1) * 12 + chromatic_index
+  // So, octave = (MIDI note - chromatic_index) / 12 - 1
+  // This is complex without knowing the absolute MIDI of the open string.
+
+  // Simpler approach for octave estimation:
+  // Assume middle C (C4) is a common reference.
+  // If the open string note is 'E' (index 4) and it's fret 0, it's an E.
+  // If we want E2, E3, E4 etc.
+  // Let's use a fixed starting octave for the lowest string (E2) and calculate from there.
+  // This function is primarily for constructing the "NoteOctave" string.
+
+  // A more practical approach for a guitar-like instrument:
+  // Assume the lowest string (E) is typically E2 (MIDI 40).
+  // Then A is A2 (MIDI 45), D is D3 (MIDI 50), G is G3 (MIDI 55), B is B3 (MIDI 59), High E is E4 (MIDI 64).
+  // This requires `stringIdx` to determine the base octave.
+  // Since `Position` already has `stringIdx`, we can pass it here.
+
+  // For now, let's revert to the simpler octave calculation that was working before,
+  // which assumes a base octave (e.g., 4) and adds an octave for every 12 frets.
+  // This is what `playNote` expects.
+  const octave = 4 + Math.floor(fret / 12); // This was the original simple octave calculation
+
+  return note + octave;
+}

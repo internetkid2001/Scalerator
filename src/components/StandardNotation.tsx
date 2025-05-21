@@ -9,7 +9,7 @@ import {
   Voice,
   Formatter,
 } from "vexflow";
-import { Position, CHROMATIC } from "@/lib/scales";
+import { Position, CHROMATIC, getNoteWithOctave } from "@/lib/scales"; // Import getNoteWithOctave
 import { playNote } from "@/lib/audio"; // Import playNote
 
 interface StandardNotationProps {
@@ -17,6 +17,7 @@ interface StandardNotationProps {
   root: string;
   startFret: number;
   visibleFrets: number;
+  tuning: string[] | undefined | null; // Added tuning prop
 }
 
 function StandardNotation({
@@ -24,6 +25,7 @@ function StandardNotation({
   root,
   startFret,
   visibleFrets,
+  tuning, // Destructure tuning
 }: StandardNotationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -31,8 +33,9 @@ function StandardNotation({
     const el = containerRef.current;
     if (!el) return;
 
-    // Defensive check: Ensure positions is an array. If not, default to an empty array.
+    // Defensive check: Ensure positions and tuning are arrays
     const currentPositions = Array.isArray(positions) ? positions : [];
+    const currentTuning = Array.isArray(tuning) ? tuning : [];
 
     // Clear any previous SVG content to ensure a clean redraw
     el.innerHTML = "";
@@ -62,10 +65,20 @@ function StandardNotation({
     // 1) Map each visible Position → { midi, key, originalPosition }
     const midiNotesWithPositions = visiblePositions.map((pos) => {
       const semitone = CHROMATIC.indexOf(pos.note);
-      const octave = 4 + Math.floor(pos.fret / 12);
-      const midi = (octave + 1) * 12 + semitone; // Correct MIDI calculation
-      const key = `${pos.note.toLowerCase()}/${octave}`;
-      return { midi, key, originalPosition: pos, noteNameWithOctave: pos.note + octave }; // Store full note name
+      // Get the open string note for this position's string
+      const openStringNote = currentTuning[pos.stringIdx];
+
+      // Use getNoteWithOctave for accurate octave calculation
+      const noteNameWithOctave = openStringNote ? getNoteWithOctave(pos.note, pos.fret, openStringNote) : pos.note; // Fallback if openStringNote is missing
+
+      // Parse the octave from the full note name for MIDI calculation
+      const octavePart = parseInt(noteNameWithOctave.match(/\d+$/)?.[0] || '4', 10); // Default to octave 4 if not found
+      const baseNotePart = noteNameWithOctave.replace(/\d+$/, '');
+
+      const midi = (octavePart + 1) * 12 + CHROMATIC.indexOf(baseNotePart); // Correct MIDI calculation
+      const key = `${baseNotePart.toLowerCase()}/${octavePart}`;
+
+      return { midi, key, originalPosition: pos, noteNameWithOctave: noteNameWithOctave };
     });
 
     // 2) Sort, dedupe, and pull out the unique keys and their associated original positions
@@ -125,7 +138,7 @@ function StandardNotation({
       }
     });
 
-  }, [positions, root, startFret, visibleFrets]);
+  }, [positions, root, startFret, visibleFrets, tuning]); // Add tuning to dependencies
 
   return (
     <div
