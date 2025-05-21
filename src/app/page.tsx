@@ -37,9 +37,6 @@ export default function Home() {
   const [frets, setFrets] = useState(DEFAULT_FRETS);
   const [ascii, setAscii] = useState(true);
 
-  // Removed highlightedPosition state as it's no longer needed for root note highlighting
-  // const [highlightedPosition, setHighlightedPosition] = useState<Position | null>(null);
-
   // Memoized intervals based on selection
   const intervals = useMemo(() => {
     setScaleError(null); // Clear previous error
@@ -81,21 +78,18 @@ export default function Home() {
     () => {
       // Only compute positions if there are no parsing errors and tuning is valid
       if (scaleError || tuningError || currentTuningDefinition.length === 0 || intervals.length === 0) {
-        // setHighlightedPosition(null); // Clear highlight if there's an error or no positions
         return [];
       }
       try {
         const newPositions = getScalePositions(root, intervals, currentTuningDefinition, frets);
-        // Removed logic to clear highlight based on previous highlightedPosition
         return newPositions;
       } catch (e: any) {
         // Catch errors from getScalePositions (e.g., unknown root/tuning note)
         console.error("Error computing scale positions:", e.message);
-        // setHighlightedPosition(null); // Clear highlight on error
         return [];
       }
     },
-    [root, intervals, currentTuningDefinition, frets, scaleError, tuningError] // Removed highlightedPosition from dependencies
+    [root, intervals, currentTuningDefinition, frets, scaleError, tuningError]
   );
 
   return (
@@ -260,6 +254,7 @@ export default function Home() {
               strings={strings}
               frets={frets}
               positions={positions}
+              tuning={currentTuningDefinition} // Pass the current tuning definition
             />
           </section>
 
