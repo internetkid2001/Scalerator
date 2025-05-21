@@ -12,7 +12,7 @@ export interface TablatureProps {
   ascii: boolean;
 }
 
-export default function Tablature({
+function Tablature({ // Changed to a named function for React.memo
   tuning,
   strings,
   frets,
@@ -72,3 +72,5 @@ export default function Tablature({
     );
   }
 }
+
+export default React.memo(Tablature); // Wrapped with React.memo

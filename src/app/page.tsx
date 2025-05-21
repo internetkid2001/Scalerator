@@ -13,7 +13,6 @@ type Root = typeof ROOTS[number];
 
 type ScaleName = keyof typeof SCALE_FORMULAS | "Custom";
 type TuningName = keyof typeof TUNINGS | "Custom";
-type SizeKey = "small" | "medium" | "large"; // 'size' prop is not used in Fretboard.tsx, will remove later.
 
 // Constants for fretboard dimensions to avoid magic numbers
 const DEFAULT_FRETS = 12;
@@ -33,11 +32,10 @@ export default function Home() {
   const [customTuningString, setCustomTuningString] = useState("E,A,D,G,B,E");
   const [tuningError, setTuningError] = useState<string | null>(null);
 
-  // --- strings / frets / ascii toggle / size ---
+  // --- strings / frets / ascii toggle ---
   const [strings, setStrings] = useState(TUNINGS[tuningNames[0]].length); // Initialize with default tuning's string count
   const [frets, setFrets] = useState(DEFAULT_FRETS);
   const [ascii, setAscii] = useState(true);
-  const [size, setSize] = useState<SizeKey>("medium"); // This prop is not used in Fretboard.tsx, will be removed.
 
   // Memoized intervals based on selection
   const intervals = useMemo(() => {
@@ -256,7 +254,6 @@ export default function Home() {
               strings={strings}
               frets={frets}
               positions={positions}
-              // Removed 'size' prop as it's not used in Fretboard.tsx
             />
           </section>
 

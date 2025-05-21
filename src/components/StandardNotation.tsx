@@ -15,7 +15,7 @@ interface StandardNotationProps {
   positions: Position[];
 }
 
-export default function StandardNotation({
+function StandardNotation({ // Changed to a named function for React.memo
   positions,
 }: StandardNotationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,17 +50,16 @@ export default function StandardNotation({
       // base octave: assume open-string notes start in octave 4,
       // then each 12 frets is +1 octave
       const octave = 4 + Math.floor(fret / 12);
-      const midi = octave * 12 + semitone;
       const key = `${note.toLowerCase()}/${octave}`;
-      return { midi, key };
+      return { midi: octave * 12 + semitone, key }; // Added midi to object for sorting
     });
 
     // 2) Sort, dedupe, and pull out the keys
     const sortedKeys = Array.from(
       new Map(
         midiNotes
-          .sort((a, b) => a.midi - b.midi)
-          .map(({ key, midi }) => [key, midi])
+          .sort((a, b) => a.midi - b.midi) // Sort by midi value
+          .map(({ key, midi }) => [key, midi]) // Map back to [key, midi] for Map constructor
       ).keys()
     );
 
@@ -84,7 +83,7 @@ export default function StandardNotation({
     // 5) Format & draw
     new Formatter().joinVoices([voice]).format([voice], width - 20);
     voice.draw(context, stave);
-  }, [positions]);
+  }, [positions]); // Dependency array includes positions
 
   return (
     <div
@@ -94,3 +93,5 @@ export default function StandardNotation({
     />
   );
 }
+
+export default React.memo(StandardNotation); // Wrapped with React.memo
