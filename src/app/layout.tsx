@@ -13,8 +13,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scale Explorer", // Changed title here
-  description: "Explore musical scales on a fretboard, tablature, and standard notation.", // Updated description
+  title: "Scale Explorer",
+  description: "Explore musical scales on a fretboard, tablature, and standard notation. Visualize guitar scales, bass scales, and more with custom tunings and intervals.", // Expanded description
+  keywords: ["musical scales", "fretboard", "guitar scales", "bass scales", "music theory", "tablature", "standard notation", "custom tuning", "scale visualization", "music learning"], // Added keywords
+  authors: [{ name: "Victor Grisson" }], // Updated author
+  creator: "Victor Grisson", // Updated creator
+  publisher: "VISTA (Volunteers In Service To Art)", // Updated publisher
+  metadataBase: new URL('https://volunteersinservicetoart.com'), // Updated to company website
+  openGraph: {
+    title: "Scale Explorer - Visualize Musical Scales",
+    description: "An interactive tool to explore and visualize musical scales on a fretboard, tablature, and standard notation.",
+    url: "https://volunteersinservicetoart.com", // Updated to company website
+    siteName: "Scale Explorer",
+    images: [
+      {
+        url: "https://your-domain.com/og-image.jpg", // Placeholder: replace with a URL to an image for social media sharing
+        width: 1200,
+        height: 630,
+        alt: "Scale Explorer musical scale visualization",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Scale Explorer - Visualize Musical Scales",
+    description: "An interactive tool to explore and visualize musical scales on a fretboard, tablature, and standard notation.",
+    creator: "@yourtwitterhandle", // Placeholder: replace with your Twitter handle
+    images: ["https://your-domain.com/twitter-image.jpg"], // Placeholder: replace with a URL to an image for Twitter sharing
+  },
+  themeColor: "#2563EB", // Matches the favicon blue color
 };
 
 export default function RootLayout({
