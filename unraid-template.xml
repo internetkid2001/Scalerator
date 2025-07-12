@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Scalerator</Name>
+  <Repository>ghcr.io/internetkid2001/scalerator:latest</Repository>
+  <Registry>https://ghcr.io/internetkid2001/scalerator</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/internetkid2001/Scalerator</Support>
+  <Project>https://github.com/internetkid2001/Scalerator</Project>
+  <Overview>Interactive musical scale visualization tool with fretboard, tablature, and standard notation views. Explore guitar scales, bass scales, and more with custom tunings and intervals.</Overview>
+  <Category>Tools: MediaApp:Music</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/internetkid2001/Scalerator/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/internetkid2001/Scalerator/main/public/favicon.ico</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled></DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="3000" Default="3002" Mode="tcp" Description="Port for accessing the Scalerator web interface" Type="Port" Display="always" Required="true" Mask="false">3002</Config>
+  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node.js environment" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+</Container>
